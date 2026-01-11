@@ -2,9 +2,6 @@ const std = @import("std");
 const decode = @import("decode.zig");
 pub fn main() !void {
     // Prints to stderr, ignoring potential errors.
-    const x = decode.hasNext(255);
-    const y = if (x) "true" else "false";
-    std.debug.print("{s}", .{y});
 }
 
 test "simple test" {

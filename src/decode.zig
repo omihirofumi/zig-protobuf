@@ -1,6 +1,23 @@
 const std = @import("std");
 
-const ProtoError = error{ UnexpectedEof, VariantTooLong };
+const ProtoError = error{
+    UnexpectedEof,
+    VariantTooLong,
+    InvalidWireType,
+    InvalidFieldNumber,
+};
+
+pub const WireType = enum(u3) {
+    varint = 0,
+    fixed64 = 1,
+    len = 2,
+    fixed32 = 5,
+};
+
+pub const Key = struct {
+    field_number: u32,
+    wire: WireType,
+};
 
 const Reader = struct {
     buf: []const u8,
@@ -13,7 +30,7 @@ const Reader = struct {
         return b;
     }
 
-    pub fn readVarintU64(self: *Reader) !u64 {
+    pub fn readVarint(self: *Reader) !u64 {
         var shift: u6 = 0;
         var result: u64 = 0;
 
@@ -29,17 +46,74 @@ const Reader = struct {
         }
         return ProtoError.VariantTooLong;
     }
+
+    pub fn readKey(self: *Reader) !Key {
+        const k = try self.readVarint();
+
+        const wire_type: u3 = @intCast(k & 0x7);
+
+        const field: u32 = @intCast(k >> 3);
+
+        const wire: WireType = switch (wire_type) {
+            0 => .varint,
+            1 => .fixed64,
+            2 => .len,
+            5 => .fixed32,
+            else => return error.InvalidWireType,
+        };
+
+        return .{ .field_number = field, .wire = wire };
+    }
 };
 
 test "varint decoding" {
     var r1 = Reader{ .buf = &.{0x01} };
-    try std.testing.expectEqual(@as(u64, 1), try r1.readVarintU64());
+    try std.testing.expectEqual(@as(u64, 1), try r1.readVarint());
 
     // 0x96 -> 10010110
     var r2 = Reader{ .buf = &.{ 0x96, 0x01 } };
-    try std.testing.expectEqual(@as(u64, 150), try r2.readVarintU64());
+    try std.testing.expectEqual(@as(u64, 150), try r2.readVarint());
 
     // 0xAC -> 10101100
     var r3 = Reader{ .buf = &.{ 0xAC, 0x02 } };
-    try std.testing.expectEqual(@as(u64, 300), try r3.readVarintU64());
+    try std.testing.expectEqual(@as(u64, 300), try r3.readVarint());
+}
+
+test "key decoding basics" {
+    // field=1, wire=0(varint)
+    // key = (1<<3)|0 = 8
+    // 0x08 = 0000_1000
+    var r1 = Reader{ .buf = &.{0x08} };
+    const k1 = try r1.readKey();
+    try std.testing.expectEqual(@as(u32, 1), k1.field_number);
+    try std.testing.expect(k1.wire == .varint);
+
+    // field=2, wire=2(len)
+    // key = (2<<3)|2 = 18
+    // 0x12 = 0001_0010
+    var r2 = Reader{ .buf = &.{0x12} };
+    const k2 = try r2.readKey();
+    try std.testing.expectEqual(@as(u32, 2), k2.field_number);
+    try std.testing.expect(k2.wire == .len);
+
+    // field=15, wire=5(fixed32)
+    // key = (15<<3)|5 = 125
+    // 0x7D = 0111_1101
+    var r3 = Reader{ .buf = &.{0x7D} };
+    const k3 = try r3.readKey();
+    try std.testing.expectEqual(@as(u32, 15), k3.field_number);
+    try std.testing.expect(k3.wire == .fixed32);
+}
+
+test "key errors" {
+    // field=0 は不正（protobuf仕様）
+    // key = 0x00 = 0000_0000 → field=0, wire=0
+    var r1 = Reader{ .buf = &.{0x00} };
+    try std.testing.expectError(ProtoError.InvalidFieldNumber, r1.readKey());
+
+    // wire=3(group start) はここでは未対応 → InvalidWireType
+    // field=1, wire=3 => (1<<3)|3 = 11
+    // 0x0B = 0000_1011
+    var r2 = Reader{ .buf = &.{0x0B} };
+    try std.testing.expectError(ProtoError.InvalidWireType, r2.readKey());
 }
