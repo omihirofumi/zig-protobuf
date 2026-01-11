@@ -5,6 +5,7 @@ const ProtoError = error{
     VariantTooLong,
     InvalidWireType,
     InvalidFieldNumber,
+    LengthOverflow,
 };
 
 pub const WireType = enum(u3) {
@@ -25,6 +26,14 @@ pub const Reader = struct {
 
     pub fn init(buf: []const u8) Reader {
         return .{ .buf = buf, .pos = 0 };
+    }
+
+    fn eof(self: *Reader) bool {
+        return self.pos >= self.buf.len;
+    }
+
+    fn require(self: *Reader, n: usize) !void {
+        if (self.po + n > self.buf.len) return ProtoError.UnexpectedEof;
     }
 
     fn readByte(self: *Reader) !u64 {
@@ -67,6 +76,34 @@ pub const Reader = struct {
         };
 
         return .{ .field_number = field, .wire = wire };
+    }
+
+    pub fn readFixed32(self: *Reader) !u32 {
+        try self.require(4);
+        const s = self.buf[self.pos .. self.pos + 4];
+        self.pos += 4;
+        return std.mem.readInt(u32, s, .little);
+    }
+
+    pub fn readFixed64(self: *Reader) !u32 {
+        try self.require(8);
+        const s = self.buf[self.pos .. self.pos + 8];
+        self.pos += 8;
+        return std.mem.readInt(u64, s, .little);
+    }
+
+    pub fn readLen(self: *Reader) !usize {
+        const len = try self.readVarint();
+        if (len > std.math.maxInt(usize)) return ProtoError.LengthOverflow;
+        return @intCast(len);
+    }
+
+    pub fn readBytes(self: *Reader) ![]const u8 {
+        const len = try readLen();
+        try self.require(len);
+        const s = self.buf[self.pos .. self.pos + len];
+        self.pos += len;
+        return s;
     }
 };
 
