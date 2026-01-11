@@ -19,9 +19,13 @@ pub const Key = struct {
     wire: WireType,
 };
 
-const Reader = struct {
+pub const Reader = struct {
     buf: []const u8,
     pos: usize = 0,
+
+    pub fn init(buf: []const u8) Reader {
+        return .{ .buf = buf, .pos = 0 };
+    }
 
     fn readByte(self: *Reader) !u64 {
         if (self.pos >= self.buf.len) return ProtoError.UnexpectedEof;
