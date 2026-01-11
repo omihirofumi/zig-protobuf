@@ -1,10 +1,10 @@
 const std = @import("std");
-const zig_protobuf = @import("zig_protobuf");
-
+const decode = @import("decode.zig");
 pub fn main() !void {
     // Prints to stderr, ignoring potential errors.
-    std.debug.print("All your {s} are belong to us.\n", .{"codebase"});
-    try zig_protobuf.bufferedPrint();
+    const x = decode.hasNext(255);
+    const y = if (x) "true" else "false";
+    std.debug.print("{s}", .{y});
 }
 
 test "simple test" {
