@@ -28,12 +28,12 @@ pub const Reader = struct {
         return .{ .buf = buf, .pos = 0 };
     }
 
-    fn eof(self: *Reader) bool {
+    pub fn eof(self: *Reader) bool {
         return self.pos >= self.buf.len;
     }
 
     fn require(self: *Reader, n: usize) !void {
-        if (self.po + n > self.buf.len) return ProtoError.UnexpectedEof;
+        if (self.pos + n > self.buf.len) return ProtoError.UnexpectedEof;
     }
 
     fn readByte(self: *Reader) !u64 {
@@ -80,16 +80,24 @@ pub const Reader = struct {
 
     pub fn readFixed32(self: *Reader) !u32 {
         try self.require(4);
-        const s = self.buf[self.pos .. self.pos + 4];
+        var result: u32 = 0;
+        for (0..4) |i| {
+            const byte: u32 = self.buf[self.pos + i];
+            result |= byte << @as(u5, @intCast(i * 8));
+        }
         self.pos += 4;
-        return std.mem.readInt(u32, s, .little);
+        return result;
     }
 
-    pub fn readFixed64(self: *Reader) !u32 {
+    pub fn readFixed64(self: *Reader) !u64 {
         try self.require(8);
-        const s = self.buf[self.pos .. self.pos + 8];
+        var result: u64 = 0;
+        for (0..8) |i| {
+            const byte: u64 = self.buf[self.pos + i];
+            result |= byte << @as(u6, @intCast(i * 8));
+        }
         self.pos += 8;
-        return std.mem.readInt(u64, s, .little);
+        return result;
     }
 
     pub fn readLen(self: *Reader) !usize {
@@ -99,7 +107,7 @@ pub const Reader = struct {
     }
 
     pub fn readBytes(self: *Reader) ![]const u8 {
-        const len = try readLen();
+        const len = try self.readLen();
         try self.require(len);
         const s = self.buf[self.pos .. self.pos + len];
         self.pos += len;
