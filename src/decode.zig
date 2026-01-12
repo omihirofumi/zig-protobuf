@@ -66,6 +66,7 @@ pub const Reader = struct {
         const wire_type: u3 = @intCast(k & 0x7);
 
         const field: u32 = @intCast(k >> 3);
+        if (field == 0) return ProtoError.InvalidFieldNumber;
 
         const wire: WireType = switch (wire_type) {
             0 => .varint,
