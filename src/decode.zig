@@ -137,6 +137,46 @@ fn zigzagDecode(n: u64) i64 {
     return shifted ^ mask;
 }
 
+// message Checkout {
+//   // The operation at which the working copy was updated.
+//   bytes operation_id = 2;
+//   // An identifier for this workspace. It is used for looking up the current
+//   // working-copy commit in the repo view. Currently a human-readable name.
+//   // TODO: Is it better to make this a UUID and a have map that to a name in
+//   // config? That way users can rename a workspace.
+//   string workspace_name = 3;
+//   reserved 1;
+// }
+
+pub const Checkout = struct {
+    workspace_name: []const u8 = &.{},
+
+    pub fn init() Checkout {
+        return .{};
+    }
+};
+
+pub fn decodeCheckout(r: *Reader) !Checkout {
+    var checkout: Checkout = .{};
+
+    while (!r.eof()) {
+        const key = try r.readKey();
+
+        switch (key.field_number) {
+            3 => {
+                if (key.wire != .len) return ProtoError.InvalidWireType;
+                const value = try r.readBytes();
+                checkout.workspace_name = value;
+            },
+            else => {
+                try r.skipField(key.wire);
+            },
+        }
+    }
+
+    return checkout;
+}
+
 test "varint decoding" {
     var r1 = Reader{ .buf = &.{0x01} };
     try std.testing.expectEqual(@as(u64, 1), try r1.readVarint());

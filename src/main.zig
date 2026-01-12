@@ -1,23 +1,23 @@
 const std = @import("std");
 const decode = @import("decode.zig");
 pub fn main() !void {
-    // var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    // const alloc = try gpa.allocator();
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    const alloc = gpa.allocator();
 
-    var buf: [1024]u8 = undefined;
-    var stdin_reader = std.fs.File.stdin().reader(&buf);
-    const stdin = &stdin_reader.interface;
+    // https://williamw520.github.io/2025/09/23/back-to-basic-reading-file-in-zig.html
+    const cwd = std.fs.cwd();
+    const file = try cwd.openFile(".jj/working_copy/checkout", .{ .mode = .read_only });
+    defer file.close();
 
-    var line_buf: [1024]u8 = undefined;
-    var writer: std.io.Writer = .fixed(&line_buf);
+    var f_buf: [1024]u8 = undefined;
+    var f_reader = file.reader(&f_buf);
+    const reader = &f_reader.interface;
 
-    const n = try stdin.streamDelimiterEnding(&writer, '\n');
-    const line = line_buf[0..n];
+    const content = try reader.allocRemaining(alloc, .unlimited);
+    var decode_reader = decode.Reader.init(content);
+    const checkout = try decode.decodeCheckout(&decode_reader);
 
-    var decode_reader = decode.Reader.init(line);
-
-    const msg = try decode.decodeMsg(&decode_reader);
-    std.debug.print("{d}, {s}", .{ msg.a, msg.s });
+    std.debug.print("workspace = {s}\n", .{checkout.workspace_name});
 
     // while (!decode_reader.eof()) {
     //     const key = try decode_reader.readKey();
