@@ -16,28 +16,31 @@ pub fn main() !void {
 
     var decode_reader = decode.Reader.init(line);
 
-    while (!decode_reader.eof()) {
-        const key = try decode_reader.readKey();
-        std.debug.print("field_number={d}\n", .{key.field_number});
+    const msg = try decode.decodeMsg(&decode_reader);
+    std.debug.print("{d}, {s}", .{ msg.a, msg.s });
 
-        switch (key.wire) {
-            .varint => {
-                const v = try decode_reader.readVarint();
-                std.debug.print("value={d}", .{v});
-            },
-            .fixed32 => {
-                const v = try decode_reader.readFixed32();
-                std.debug.print("value={d}", .{v});
-            },
-            .fixed64 => {
-                const v = try decode_reader.readFixed64();
-                std.debug.print("value={d}", .{v});
-            },
-            .len => {
-                _ = try decode_reader.readBytes();
-            },
-        }
-    }
+    // while (!decode_reader.eof()) {
+    //     const key = try decode_reader.readKey();
+    //     std.debug.print("field_number={d}\n", .{key.field_number});
+    //
+    //     switch (key.wire) {
+    //         .varint => {
+    //             const v = try decode_reader.readVarint();
+    //             std.debug.print("value={d}", .{v});
+    //         },
+    //         .fixed32 => {
+    //             const v = try decode_reader.readFixed32();
+    //             std.debug.print("value={d}", .{v});
+    //         },
+    //         .fixed64 => {
+    //             const v = try decode_reader.readFixed64();
+    //             std.debug.print("value={d}", .{v});
+    //         },
+    //         .len => {
+    //             _ = try decode_reader.readBytes();
+    //         },
+    //     }
+    // }
 }
 
 test "simple test" {

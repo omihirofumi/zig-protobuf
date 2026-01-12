@@ -114,12 +114,63 @@ pub const Reader = struct {
         self.pos += len;
         return s;
     }
+
+    pub fn readSInt(self: *Reader) !i64 {
+        const raw = try self.readVarint();
+        return zigzagDecode(raw);
+    }
+
+    // 後方互換性
+    pub fn skipField(self: *Reader, wire: WireType) !void {
+        switch (wire) {
+            .varint => _ = try self.readVarint(),
+            .fixed64 => _ = try self.readFixed64(),
+            .len => _ = try self.readByte(),
+            .fixed32 => _ = try self.readFixed32(),
+        }
+    }
 };
 
-pub fn zigzagDecode(n: u64) i64 {
+fn zigzagDecode(n: u64) i64 {
     const shifted: i64 = @bitCast(n >> 1);
     const mask: i64 = -@as(i64, @intCast(n & 1));
     return shifted ^ mask;
+}
+
+// ## protobuf
+// message Msg {
+//   uint64 a = 1;  // varint
+//   string s = 2;  // len
+// }
+
+pub const Msg = struct {
+    a: u64 = 0,
+    s: []const u8 = "",
+};
+
+pub fn decodeMsg(r: *Reader) !Msg {
+    var out: Msg = .{};
+
+    while (!r.eof()) {
+        const key = try r.readKey();
+
+        switch (key.field_number) {
+            1 => {
+                if (key.wire != .varint) return ProtoError.InvalidWireType;
+                const value = try r.readVarint();
+                out.a = value;
+            },
+            2 => {
+                if (key.wire != .len) return ProtoError.InvalidWireType;
+                const value = try r.readBytes();
+                out.s = value;
+            },
+            else => {
+                try r.skipField(key.wire);
+            },
+        }
+    }
+    return out;
 }
 
 test "varint decoding" {
