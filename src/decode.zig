@@ -116,6 +116,12 @@ pub const Reader = struct {
     }
 };
 
+pub fn zigzagDecode(n: u64) i64 {
+    const shifted: i64 = @bitCast(n >> 1);
+    const mask: i64 = -@as(i64, @intCast(n & 1));
+    return shifted ^ mask;
+}
+
 test "varint decoding" {
     var r1 = Reader{ .buf = &.{0x01} };
     try std.testing.expectEqual(@as(u64, 1), try r1.readVarint());
@@ -166,4 +172,10 @@ test "key errors" {
     // 0x0B = 0000_1011
     var r2 = Reader{ .buf = &.{0x0B} };
     try std.testing.expectError(ProtoError.InvalidWireType, r2.readKey());
+}
+
+test "zigzag decode" {
+    try std.testing.expectEqual(0, zigzagDecode(0));
+    try std.testing.expectEqual(-5, zigzagDecode(9));
+    try std.testing.expectEqual(5, zigzagDecode(10));
 }
