@@ -2,7 +2,7 @@ const std = @import("std");
 
 const ProtoError = error{
     UnexpectedEof,
-    VariantTooLong,
+    VarintTooLong,
     InvalidWireType,
     InvalidFieldNumber,
     LengthOverflow,
@@ -36,7 +36,7 @@ pub const Reader = struct {
         if (self.pos + n > self.buf.len) return ProtoError.UnexpectedEof;
     }
 
-    fn readByte(self: *Reader) !u64 {
+    fn readByte(self: *Reader) !u8 {
         if (self.pos >= self.buf.len) return ProtoError.UnexpectedEof;
         const b = self.buf[self.pos];
         self.pos += 1;
@@ -57,7 +57,7 @@ pub const Reader = struct {
 
             shift += 7;
         }
-        return ProtoError.VariantTooLong;
+        return ProtoError.VarintTooLong;
     }
 
     pub fn readKey(self: *Reader) !Key {
@@ -73,7 +73,7 @@ pub const Reader = struct {
             1 => .fixed64,
             2 => .len,
             5 => .fixed32,
-            else => return error.InvalidWireType,
+            else => return ProtoError.InvalidWireType,
         };
 
         return .{ .field_number = field, .wire = wire };
@@ -125,7 +125,7 @@ pub const Reader = struct {
         switch (wire) {
             .varint => _ = try self.readVarint(),
             .fixed64 => _ = try self.readFixed64(),
-            .len => _ = try self.readByte(),
+            .len => _ = try self.readBytes(),
             .fixed32 => _ = try self.readFixed32(),
         }
     }
@@ -135,42 +135,6 @@ fn zigzagDecode(n: u64) i64 {
     const shifted: i64 = @bitCast(n >> 1);
     const mask: i64 = -@as(i64, @intCast(n & 1));
     return shifted ^ mask;
-}
-
-// ## protobuf
-// message Msg {
-//   uint64 a = 1;  // varint
-//   string s = 2;  // len
-// }
-
-pub const Msg = struct {
-    a: u64 = 0,
-    s: []const u8 = "",
-};
-
-pub fn decodeMsg(r: *Reader) !Msg {
-    var out: Msg = .{};
-
-    while (!r.eof()) {
-        const key = try r.readKey();
-
-        switch (key.field_number) {
-            1 => {
-                if (key.wire != .varint) return ProtoError.InvalidWireType;
-                const value = try r.readVarint();
-                out.a = value;
-            },
-            2 => {
-                if (key.wire != .len) return ProtoError.InvalidWireType;
-                const value = try r.readBytes();
-                out.s = value;
-            },
-            else => {
-                try r.skipField(key.wire);
-            },
-        }
-    }
-    return out;
 }
 
 test "varint decoding" {
